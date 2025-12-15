@@ -864,6 +864,13 @@ class TensorQuantizer(nn.Module):
         Returns:
             outputs: A Tensor of type output_dtype
         """
+        if self._disabled:
+            # if quantizer is disabled, we still need to track the input dtype for saving the model
+            # TODO: This is a temporary solution and needs to be removed once megatron supports
+            # non-homogeneous layers
+            self._input_dtype = inputs.dtype if hasattr(inputs, "dtype") else None
+            return inputs
+            
         if DTensor is not None and isinstance(inputs, DTensor):
             # TensorQuantizer only handles regular non-DTensor inputs
             device_mesh, placements = inputs.device_mesh, inputs.placements
@@ -885,13 +892,6 @@ class TensorQuantizer(nn.Module):
         # Rotating the input
         if self._rotate:
             inputs = normalized_hadamard_transform(inputs)
-
-        if self._disabled:
-            # if quantizer is disabled, we still need to track the input dtype for saving the model
-            # TODO: This is a temporary solution and needs to be removed once megatron supports
-            # non-homogeneous layers
-            self._input_dtype = inputs.dtype if hasattr(inputs, "dtype") else None
-            return inputs
 
         if (
             not is_torch_export_mode()

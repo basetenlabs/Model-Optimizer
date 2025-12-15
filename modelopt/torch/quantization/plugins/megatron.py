@@ -796,8 +796,8 @@ class _QuantMoELayer(QuantModule):
 
     def forward(self, hidden_states):
         if any(getattr(m, "_if_calib", False) for m in self.experts.modules()):
-            original_top_k = self.router.topk
-            self.router.topk = self.router.num_experts
+            # original_top_k = self.router.topk
+            # self.router.topk = self.router.num_experts
             super().forward(hidden_states)
-            self.router.topk = original_top_k
+            # self.router.topk = original_top_k
         return super().forward(hidden_states)

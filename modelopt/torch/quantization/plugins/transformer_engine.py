@@ -146,7 +146,14 @@ class _QuantTEGroupedLinear(_ParallelLinear):
         _assert_te_fp8_enabled()
         idx = 1 if func_name == "_forward" else 0
         inp = args[idx]
-        num_gemms = len(args[idx + 1])
+        if isinstance(args[idx + 1], tuple):
+            # for te 2.09
+            assert isinstance(args[idx + 1][0], list), "args[idx + 1] should be a list of lists"
+            num_gemms = len(args[idx + 1][0])
+        else:
+            # for te 2.12
+            assert isinstance(args[idx + 1], list), "args[idx + 1] should be a list"
+            num_gemms = len(args[idx + 1])
         weights_and_biases = args[-2 * num_gemms :]
         weights, biases = weights_and_biases[:num_gemms], weights_and_biases[num_gemms:]
         quantized_inputs = self.input_quantizer(inp)
