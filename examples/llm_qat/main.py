@@ -34,6 +34,10 @@ from dataclasses import dataclass, field
 from warnings import warn
 
 import torch
+# Workaround for cuBLAS bf16 GEMM bug on B200 (CUDA 12.8, driver 580.x)
+# The default cublas backend fails with CUBLAS_STATUS_INVALID_VALUE on all half-precision GEMMs.
+# cublasLt works correctly. See: test_cublas.py for reproduction.
+torch.backends.cuda.preferred_blas_library("cublaslt")
 import transformers
 from transformers.trainer_utils import get_last_checkpoint
 from utils import (
