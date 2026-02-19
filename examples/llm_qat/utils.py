@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import gc
+import os
 import types
 from contextlib import contextmanager
 from functools import partial
@@ -28,20 +29,31 @@ IGNORE_INDEX = -100
 
 
 @contextmanager
-def main_process_first():
-    """Context manager to run code on the main process first."""
+def local_main_process_first():
+    """Context manager to run code on local rank 0 first (per-node).
+
+    Uses a file lock so only one process per node downloads the dataset.
+    Avoids global barriers that timeout on clusters without shared filesystems.
+    """
     if not torch.distributed.is_initialized():
         yield
         return
 
-    rank = torch.distributed.get_rank()
-    if rank == 0:
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    lock_file = "/tmp/.dataset_download.lock"
+
+    if local_rank == 0:
         yield
-        torch.distributed.barrier()
+        # Signal to other local ranks that download is done
+        with open(lock_file, "w") as f:
+            f.write("done")
     else:
-        torch.distributed.barrier()
+        # Wait for local rank 0 to finish
+        import time
+
+        while not os.path.exists(lock_file):
+            time.sleep(1)
         yield
-    torch.distributed.barrier()
 
 
 DATASET_REGISTRY = {
@@ -149,7 +161,7 @@ def get_chat_dataset(
     if hf_dataset_id in _dataset_cache:
         dataset = _dataset_cache[hf_dataset_id]
     else:
-        with main_process_first():
+        with local_main_process_first():
             load_kwargs = {"token": hf_token} if hf_token else {}
             dataset = datasets.load_dataset(hf_dataset_id, split="train", **load_kwargs)
             # Shuffle and subsample the dataset
