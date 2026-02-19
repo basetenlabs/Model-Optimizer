@@ -68,10 +68,10 @@ srun bash -c '
   export HF_TOKEN="'"${MODEL_HF_TOKEN}"'"
   export NCCL_DEBUG=INFO
 
-  # Exclude management IB NICs (mlx5_6-9) — they are 100 Gbps / MTU 512 on a
-  # separate fabric, vs the 8× data NICs at 400 Gbps / MTU 4096.  Mixing them
-  # causes RDMA vendor errors 129/244/249.
-  export NCCL_IB_HCA="^mlx5_6,mlx5_7,mlx5_8,mlx5_9"
+  # Disable IB entirely — the cluster's IB fabric is broken for cross-node RDMA.
+  # Even after excluding management NICs (mlx5_6-9), the data NICs (e.g. mlx5_10)
+  # still produce vendor err 249 on cross-node transfers.  Fall back to TCP sockets.
+  export NCCL_IB_DISABLE=1
 
   # Force PyTorch c10d to use IP instead of unresolvable hostname
   export MASTER_ADDR="'"${MASTER_ADDR}"'"
