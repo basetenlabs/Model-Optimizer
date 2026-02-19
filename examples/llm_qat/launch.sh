@@ -49,6 +49,7 @@ while [ $# -gt 0 ]; do
     --max_seq_length*)                          MAX_SEQ_LENGTH=$(parse_value "$@"); [[ "$1" != *=* ]] && shift ;;
     --backend*)                                 BACKEND=$(parse_value "$@"); [[ "$1" != *=* ]] && shift ;;
     --use_fsdp2*)                               USE_FSDP2=$(parse_value "$@"); [[ "$1" != *=* ]] && shift ;;
+    --hf_token*)                                HF_TOKEN_ARG=$(parse_value "$@"); [[ "$1" != *=* ]] && shift ;;
     *)
       >&2 printf "Error: Invalid argument ${1#*=}\n"
       exit 1
@@ -94,6 +95,10 @@ fi
 OPTIONAL_ARGS=""
 if [ ! -z $MAX_STEPS ]; then
   OPTIONAL_ARGS="$OPTIONAL_ARGS --max_steps $MAX_STEPS"
+fi
+
+if [ ! -z "$HF_TOKEN_ARG" ]; then
+  OPTIONAL_ARGS="$OPTIONAL_ARGS --hf_token $HF_TOKEN_ARG"
 fi
 
 # Set backend based on --backend parameter, with backward compatibility for --use_fsdp2

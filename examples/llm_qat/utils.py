@@ -44,67 +44,114 @@ def main_process_first():
     torch.distributed.barrier()
 
 
-def get_daring_anteater(
+DATASET_REGISTRY = {
+    "Daring-Anteater": "nvidia/Daring-Anteater",
+}
+
+
+def _normalize_messages(sample):
+    """Normalize a dataset sample into a list of (role, content) tuples.
+
+    Supports two formats:
+      - Daring-Anteater style: {"conversations": [{"from": "User"|"Assistant", "value": "..."}], "system": "..."}
+      - OpenAI messages style:  {"messages": [{"role": "system"|"user"|"assistant", "content": "..."}]}
+    """
+    if "messages" in sample:
+        # OpenAI messages format
+        return [
+            (msg["role"].lower(), msg["content"])
+            for msg in sample["messages"]
+        ]
+    elif "conversations" in sample:
+        # Daring-Anteater / NVIDIA conversation format
+        messages = []
+        if sample.get("system"):
+            messages.append(("system", sample["system"]))
+        for turn in sample["conversations"]:
+            role = turn["from"].lower()  # "User" -> "user", "Assistant" -> "assistant"
+            messages.append((role, turn["value"]))
+        return messages
+    else:
+        raise ValueError(f"Unknown dataset format. Sample keys: {list(sample.keys())}")
+
+
+def _tokenize_messages(messages, tokenizer, max_length):
+    """Tokenize a normalized message list into input_ids, attention_mask, labels.
+
+    Only assistant turns are used as training targets; all other roles are masked.
+    """
+    all_input_ids = [tokenizer.bos_token_id] if tokenizer.bos_token_id else []
+    all_labels = [IGNORE_INDEX] if tokenizer.bos_token_id else []
+
+    for role, content in messages:
+        input_ids = tokenizer.encode(content + "\n", add_special_tokens=False)
+        labels = input_ids if role == "assistant" else [IGNORE_INDEX] * len(input_ids)
+
+        all_input_ids.extend(input_ids)
+        all_labels.extend(labels)
+
+        if len(all_input_ids) > max_length:
+            break
+
+    all_input_ids.append(tokenizer.eos_token_id)
+    all_labels.append(IGNORE_INDEX)
+    all_attention_mask = [1] * len(all_input_ids)
+
+    cur_seq_length = len(all_input_ids)
+    if cur_seq_length < max_length:
+        pad_token = (
+            tokenizer.pad_token_id
+            if tokenizer.pad_token_id is not None
+            else tokenizer.eos_token_id
+        )
+        all_input_ids += [pad_token] * (max_length - cur_seq_length)
+        all_attention_mask += [0] * (max_length - cur_seq_length)
+        all_labels += [IGNORE_INDEX] * (max_length - cur_seq_length)
+
+    return {
+        "input_ids": all_input_ids[:max_length],
+        "attention_mask": all_attention_mask[:max_length],
+        "labels": all_labels[:max_length],
+    }
+
+
+_dataset_cache = {}
+
+
+def get_chat_dataset(
+    dataset_name: str,
     tokenizer: transformers.AutoTokenizer,
     split="train",
     max_length=4096,
     train_size=0,
     eval_size=0,
+    hf_token=None,
 ):
-    # sample = {
-    #     'system': '{system message}',
-    #     'conversations': [
-    #         {'from': 'User', 'value': '{turn 1 user message}', 'label': None},
-    #         {'from': 'Assistant', 'value': '{turn 1 assistant message}', 'label': '{turn 1 assistant label}'},
-    #         {'from': 'User', 'value': '{turn 2 user message}', 'label': None},
-    #         {'from': 'Assistant', 'value': '{turn 2 assistant message}', 'label': '{turn 2 assistant label}'},
-    #     ],
-    #     "mask": "User",
-    #     "type": "VALUE_TO_TEXT",
-    # }
+    """Load and tokenize a chat dataset. Supports any HuggingFace dataset with either
+    Daring-Anteater conversation format or OpenAI messages format.
+
+    Args:
+        dataset_name: A key in DATASET_REGISTRY (e.g. "Daring-Anteater") or a HuggingFace
+                      dataset ID (e.g. "baseten/gamma-paste-text-train-v3").
+        tokenizer: The tokenizer to use.
+        split: "train" or "test".
+        max_length: Maximum sequence length.
+        train_size: Number of training samples (0 = use all available minus eval).
+        eval_size: Number of eval samples (0 = default 2000).
+        hf_token: Optional HuggingFace token for private datasets.
+    """
+    hf_dataset_id = DATASET_REGISTRY.get(dataset_name, dataset_name)
 
     def process_and_tokenize(sample):
-        conversations = sample["conversations"]
-        all_input_ids = [tokenizer.bos_token_id] if tokenizer.bos_token_id else []
-        all_labels = [IGNORE_INDEX] if tokenizer.bos_token_id else []
+        messages = _normalize_messages(sample)
+        return _tokenize_messages(messages, tokenizer, max_length)
 
-        for conversation in conversations:
-            role = conversation["from"]
-            input_ids = tokenizer.encode(conversation["value"] + "\n", add_special_tokens=False)
-            labels = input_ids if role == "Assistant" else [IGNORE_INDEX] * len(input_ids)
-
-            all_input_ids.extend(input_ids)
-            all_labels.extend(labels)
-
-            if len(all_input_ids) > max_length:
-                break
-
-        all_input_ids.append(tokenizer.eos_token_id)
-        all_labels.append(IGNORE_INDEX)
-        all_attention_mask = [1] * len(all_input_ids)
-
-        cur_seq_length = len(all_input_ids)
-        if cur_seq_length < max_length:
-            pad_token = (
-                tokenizer.pad_token_id
-                if tokenizer.pad_token_id is not None
-                else tokenizer.eos_token_id
-            )
-            all_input_ids += [pad_token] * (max_length - cur_seq_length)
-            all_attention_mask += [0] * (max_length - cur_seq_length)
-            all_labels += [IGNORE_INDEX] * (max_length - cur_seq_length)
-
-        return {
-            "input_ids": all_input_ids[:max_length],
-            "attention_mask": all_attention_mask[:max_length],
-            "labels": all_labels[:max_length],
-        }
-
-    if hasattr(get_daring_anteater, "cached_dataset"):
-        dataset = get_daring_anteater.cached_dataset
+    if hf_dataset_id in _dataset_cache:
+        dataset = _dataset_cache[hf_dataset_id]
     else:
         with main_process_first():
-            dataset = datasets.load_dataset("nvidia/Daring-Anteater", split="train")
+            load_kwargs = {"token": hf_token} if hf_token else {}
+            dataset = datasets.load_dataset(hf_dataset_id, split="train", **load_kwargs)
             # Shuffle and subsample the dataset
             eval_size = 2000 if eval_size == 0 else eval_size
             train_size = len(dataset) - eval_size if train_size == 0 else train_size
@@ -114,8 +161,13 @@ def get_daring_anteater(
             dataset = dataset.shuffle(seed=42).select(range(train_size + eval_size))
             dataset = dataset.map(process_and_tokenize, remove_columns=list(dataset.features))
             dataset = dataset.train_test_split(test_size=eval_size, shuffle=True, seed=42)
-        get_daring_anteater.cached_dataset = dataset
+        _dataset_cache[hf_dataset_id] = dataset
     return dataset[split]
+
+
+# Keep backward-compatible alias
+def get_daring_anteater(tokenizer, split="train", max_length=4096, train_size=0, eval_size=0):
+    return get_chat_dataset("Daring-Anteater", tokenizer, split, max_length, train_size, eval_size)
 
 
 def make_supervised_data_module(
@@ -123,17 +175,19 @@ def make_supervised_data_module(
     tokenizer: transformers.PreTrainedTokenizer = None,
     train_size: int = 0,
     eval_size: int = 0,
+    hf_token=None,
 ) -> dict:
-    """Make dataset and collmtor for supervised fine-tuning."""
-    if dataset == "Daring-Anteater":
-        train_dataset = get_daring_anteater(
-            tokenizer, "train", tokenizer.model_max_length, train_size, eval_size
-        )
-        val_dataset = get_daring_anteater(
-            tokenizer, "test", tokenizer.model_max_length, train_size, eval_size
-        )
-    else:
-        raise ValueError(f"Dataset {dataset} not supported")
+    """Make dataset and collator for supervised fine-tuning.
+
+    Accepts any HuggingFace dataset ID or a key from DATASET_REGISTRY.
+    The dataset must have either OpenAI messages format or Daring-Anteater conversation format.
+    """
+    train_dataset = get_chat_dataset(
+        dataset, tokenizer, "train", tokenizer.model_max_length, train_size, eval_size, hf_token
+    )
+    val_dataset = get_chat_dataset(
+        dataset, tokenizer, "test", tokenizer.model_max_length, train_size, eval_size, hf_token
+    )
     return {
         "train_dataset": train_dataset,
         "eval_dataset": val_dataset,

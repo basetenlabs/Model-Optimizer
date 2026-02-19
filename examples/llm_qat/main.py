@@ -106,7 +106,14 @@ class TrainingArguments(transformers.TrainingArguments):
 class DataArguments:
     dataset: str = field(
         default="Daring-Anteater",
-        metadata={"help": "Specify the dataset.", "choices": ["Daring-Anteater"]},
+        metadata={
+            "help": (
+                "Dataset name or HuggingFace dataset ID. Use 'Daring-Anteater' for the built-in"
+                " dataset, or any HF dataset ID (e.g. 'baseten/gamma-paste-text-train-v3')."
+                " The dataset must use either OpenAI messages format or Daring-Anteater"
+                " conversation format."
+            )
+        },
     )
     train_size: int = field(
         default=0,
@@ -117,6 +124,10 @@ class DataArguments:
         metadata={
             "help": "Number of evaluation samples to use. If `0`, use default evaluation size."
         },
+    )
+    hf_token: str | None = field(
+        default=None,
+        metadata={"help": "HuggingFace token for accessing private datasets."},
     )
 
 
@@ -195,6 +206,7 @@ def train():
         tokenizer=tokenizer,
         train_size=data_args.train_size,
         eval_size=data_args.eval_size,
+        hf_token=data_args.hf_token,
     )
 
     # Ensure calibration size doesn't exceed evaluation dataset size
