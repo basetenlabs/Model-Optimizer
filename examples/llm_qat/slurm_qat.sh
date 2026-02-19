@@ -19,7 +19,8 @@ set -eo pipefail
 ###############################################################################
 MODEL="parsed/gamma-qwen3-235b-instruct-matt-merged"
 DATASET="baseten/gamma-paste-text-train-v3"
-HF_TOKEN="$(cat /secrets/harrypartridge_hf_token_whetstone)"
+MODEL_HF_TOKEN="${MODEL_HF_TOKEN:?Set MODEL_HF_TOKEN env var with HF token for model access}"
+DATASET_HF_TOKEN="$(cat /secrets/harrypartridge_hf_token_whetstone)"
 QUANT_CFG="NVFP4_DEFAULT_CFG"
 OUTPUT_DIR="qwen3-235b-qat"
 
@@ -64,7 +65,7 @@ srun --chdir=/tmp bash -c '
   set -eo pipefail
 
   export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-  export HF_TOKEN="'"${HF_TOKEN}"'"
+  export HF_TOKEN="'"${MODEL_HF_TOKEN}"'"
   export NCCL_DEBUG=INFO
 
   # Force PyTorch c10d to use IP instead of unresolvable hostname
@@ -112,7 +113,7 @@ srun --chdir=/tmp bash -c '
     --do_eval True \
     --output_dir '"${OUTPUT_DIR}"' \
     --dataset '"${DATASET}"' \
-    --hf_token '"${HF_TOKEN}"' \
+    --hf_token '"${DATASET_HF_TOKEN}"' \
     --eval_size '"${EVAL_SIZE}"' \
     --num_train_epochs '"${NUM_EPOCHS}"' \
     --per_device_train_batch_size '"${TRAIN_BS}"' \
