@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=qwen3-235b-qat
-#SBATCH --nodes=8
+#SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-node=8
 #SBATCH --cpus-per-task=96
@@ -67,6 +67,11 @@ srun bash -c '
   export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
   export HF_TOKEN="'"${MODEL_HF_TOKEN}"'"
   export NCCL_DEBUG=INFO
+
+  # Exclude management IB NICs (mlx5_6-9) — they are 100 Gbps / MTU 512 on a
+  # separate fabric, vs the 8× data NICs at 400 Gbps / MTU 4096.  Mixing them
+  # causes RDMA vendor errors 129/244/249.
+  export NCCL_IB_HCA="^mlx5_6,mlx5_7,mlx5_8,mlx5_9"
 
   # Force PyTorch c10d to use IP instead of unresolvable hostname
   export MASTER_ADDR="'"${MASTER_ADDR}"'"
