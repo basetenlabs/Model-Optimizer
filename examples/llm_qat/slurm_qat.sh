@@ -40,7 +40,7 @@ FSDP_LAYER="Qwen3MoeDecoderLayer"
 GH_TOKEN="${GH_TOKEN:?Set GH_TOKEN env var with a GitHub PAT for cloning}"
 REPO_URL="https://${GH_TOKEN}@github.com/basetenlabs/Model-Optimizer.git"
 REPO_BRANCH="qwen3-235b-qat"
-WORK_DIR="/tmp/Model-Optimizer"
+WORK_DIR="${HOME}/Model-Optimizer"
 
 ###############################################################################
 # Cluster setup — derived from Slurm environment
@@ -61,7 +61,7 @@ SAVE_STEPS=$((192 / NUM_PROCESSES))
 ###############################################################################
 # Launch — srun runs once per node; each node bootstraps then launches training
 ###############################################################################
-srun --chdir=/tmp bash -c '
+srun bash -c '
   set -eo pipefail
 
   export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -80,18 +80,23 @@ srun --chdir=/tmp bash -c '
     export PATH="${HOME}/.local/bin:${PATH}"
   fi
 
-  # Clone repo on this node (fresh clone each run to ensure latest code)
-  rm -rf "${WORK_DIR}"
-  git clone --branch "'"${REPO_BRANCH}"'" --single-branch "'"${REPO_URL}"'" "${WORK_DIR}"
+  # Get repo on this node — reuse if already cloned, otherwise fresh clone
+  if [ -d "${WORK_DIR}/.git" ]; then
+    cd "${WORK_DIR}"
+    git fetch origin "'"${REPO_BRANCH}"'"
+    git checkout "'"${REPO_BRANCH}"'"
+    git reset --hard "origin/'"${REPO_BRANCH}"'"
+  else
+    git clone --branch "'"${REPO_BRANCH}"'" --single-branch "'"${REPO_URL}"'" "${WORK_DIR}"
+    cd "${WORK_DIR}"
+  fi
 
-  cd "${WORK_DIR}"
-
-  # Install modelopt + HF deps into a local venv via uv
+  # Install modelopt + HF deps into a local venv via uv (fast no-op if already installed)
   VENV_DIR="${WORK_DIR}/.venv"
   if [ ! -d "${VENV_DIR}" ]; then
     uv venv "${VENV_DIR}"
-    uv pip install --python "${VENV_DIR}/bin/python" -e ".[hf]"
   fi
+  uv pip install --python "${VENV_DIR}/bin/python" -e ".[hf]"
 
   export PATH="${VENV_DIR}/bin:${PATH}"
 
