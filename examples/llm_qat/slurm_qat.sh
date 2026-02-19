@@ -96,7 +96,7 @@ srun --chdir=/root bash -c '
   if [ ! -d "${VENV_DIR}" ]; then
     uv venv "${VENV_DIR}"
   fi
-  uv pip install --python "${VENV_DIR}/bin/python" -e ".[hf]"
+  uv pip install --python "${VENV_DIR}/bin/python" -e ".[hf]" tensorboard
 
   export PATH="${VENV_DIR}/bin:${PATH}"
 
