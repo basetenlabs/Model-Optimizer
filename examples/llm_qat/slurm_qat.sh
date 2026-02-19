@@ -75,10 +75,9 @@ srun bash -c '
     export PATH="${HOME}/.local/bin:${PATH}"
   fi
 
-  # Clone repo on this node
-  if [ ! -d "${WORK_DIR}" ]; then
-    git clone --branch "'"${REPO_BRANCH}"'" --single-branch "'"${REPO_URL}"'" "${WORK_DIR}"
-  fi
+  # Clone repo on this node (fresh clone each run to ensure latest code)
+  rm -rf "${WORK_DIR}"
+  git clone --branch "'"${REPO_BRANCH}"'" --single-branch "'"${REPO_URL}"'" "${WORK_DIR}"
 
   cd "${WORK_DIR}"
 
