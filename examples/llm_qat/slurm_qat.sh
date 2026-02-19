@@ -48,8 +48,10 @@ NNODES=$SLURM_NNODES
 GPUS_PER_NODE=8
 NUM_PROCESSES=$((NNODES * GPUS_PER_NODE))
 
-# Get master addr/port from Slurm
-MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
+# Get master addr/port from Slurm — use IP since hostnames may not resolve across nodes
+MASTER_HOSTNAME=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
+MASTER_ADDR=$(getent hosts "$MASTER_HOSTNAME" | awk '{print $1}' | head -1)
+MASTER_ADDR=${MASTER_ADDR:-$(hostname -i)}
 MASTER_PORT=${MASTER_PORT:-29500}
 
 SAVE_STEPS=$((192 / NUM_PROCESSES))
