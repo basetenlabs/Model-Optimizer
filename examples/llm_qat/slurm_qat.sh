@@ -67,6 +67,10 @@ srun bash -c '
   export HF_TOKEN="'"${HF_TOKEN}"'"
   export NCCL_DEBUG=INFO
 
+  # Force PyTorch c10d to use IP instead of unresolvable hostname
+  export MASTER_ADDR="'"${MASTER_ADDR}"'"
+  export MASTER_PORT="'"${MASTER_PORT}"'"
+
   WORK_DIR="'"${WORK_DIR}"'"
 
   # Install uv if not available
