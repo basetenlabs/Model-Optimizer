@@ -60,7 +60,7 @@ SAVE_STEPS=$((192 / NUM_PROCESSES))
 ###############################################################################
 # Launch — srun runs once per node; each node bootstraps then launches training
 ###############################################################################
-srun bash -c '
+srun --chdir=/tmp bash -c '
   set -eo pipefail
 
   export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
