@@ -12,7 +12,7 @@ training_runtime = definitions.Runtime(
     environment_variables={
         "HF_TOKEN": definitions.SecretReference(name="parsed_hf_token"),
         "DATASET_HF_TOKEN": definitions.SecretReference(name="harrypartridge_hf_token_whetstone"),
-        "GH_TOKEN": definitions.SecretReference(name="b10_gh_token"),
+        "GH_TOKEN": definitions.SecretReference(name="GITHUB_TOKEN"),
     },
     cache_config=definitions.CacheConfig(
         enabled=True,
