@@ -97,7 +97,7 @@ fsdp_config:
   fsdp_cpu_ram_efficient_loading: true
   fsdp_forward_prefetch: false
   fsdp_offload_params: false
-  fsdp_reshard_after_forward: HYBRID_SHARD
+  fsdp_reshard_after_forward: FULL_SHARD
   fsdp_state_dict_type: FULL_STATE_DICT
   fsdp_sync_module_states: true
   fsdp_transformer_layer_cls_to_wrap: ${FSDP_LAYER}
